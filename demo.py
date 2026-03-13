@@ -1,3 +1,5 @@
+from dotenv import load_dotenv
+load_dotenv()
 # below code is to check the logging config
 # from src.logger import logging
 
@@ -19,3 +21,9 @@
 # except Exception as e:
 #     logging.info(e)
 #     raise MyException(e, sys) from e
+
+
+from src.pipline.training_pipeline import TrainPipeline
+
+pipline = TrainPipeline()
+pipline.run_pipeline()
