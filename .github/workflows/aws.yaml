@@ -4,16 +4,21 @@ on:
   push:
     branches: [main]
 
+# Recommended: explicit permissions (helps with OIDC if you ever switch, and is best practice)
+permissions:
+  id-token: write    # useful if you later switch to role-to-assume (more secure than keys)
+  contents: read
+
 jobs:
   Continuous-Integration:
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4          # ✅ Fixed: v2 → v4
+        uses: actions/checkout@v6          # ← Updated to v6 (Node 24 runtime, Jan 2026 release)
 
       - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4   # ✅ Fixed: v1 → v4
+        uses: aws-actions/configure-aws-credentials@v6   # ← Updated to v6.0.0 (Node 24, Feb 2026 release)
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -21,7 +26,7 @@ jobs:
 
       - name: Login to Amazon ECR
         id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v2             # ✅ Fixed: v1 → v2
+        uses: aws-actions/amazon-ecr-login@v2             # v2 is still fine (most recent), but watch repo for v3 later
 
       - name: Build, tag, and push image to Amazon ECR
         id: build-image
@@ -32,17 +37,17 @@ jobs:
         run: |
           docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
-          echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT   # ✅ Fixed: set-output → GITHUB_OUTPUT
+          echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
 
   Continuous-Deployment:
     needs: Continuous-Integration
-    runs-on: self-hosted
+    runs-on: self-hosted                     # Your EC2 runner — make sure runner software ≥ v2.329.0 (March 2026 req.)
     steps:
       - name: Checkout
-        uses: actions/checkout@v4          # ✅ Fixed: v3 → v4
+        uses: actions/checkout@v6          # ← Also update here to v6
 
       - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4   # ✅ Fixed: v1 → v4
+        uses: aws-actions/configure-aws-credentials@v6   # ← v6 here too
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -50,11 +55,11 @@ jobs:
 
       - name: Login to Amazon ECR
         id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v2             # ✅ Fixed: v1 → v2
+        uses: aws-actions/amazon-ecr-login@v2
 
       - name: Pull latest Docker image
         run: |
-          docker pull "${{ steps.login-ecr.outputs.registry }}"/"${{ secrets.ECR_REPO }}":latest
+          docker pull "\( {{ steps.login-ecr.outputs.registry }}/ \){{ secrets.ECR_REPO }}:latest"
 
       - name: Stop and remove old container (if running)
         run: |
@@ -70,4 +75,4 @@ jobs:
             -e AWS_DEFAULT_REGION="${{ secrets.AWS_DEFAULT_REGION }}" \
             -e MONGODB_URL="${{ secrets.MONGODB_URL }}" \
             -p 5000:5000 \
-            "${{ steps.login-ecr.outputs.registry }}"/"${{ secrets.ECR_REPO }}":latest
+            "\( {{ steps.login-ecr.outputs.registry }}/ \){{ secrets.ECR_REPO }}:latest"
